@@ -28,33 +28,45 @@ func testRAID(mount string, partitionedMembers bool) []LSBLKModel {
 }
 
 func TestStorageDevicesRAID(t *testing.T) {
-	for _, partitioned := range []bool{false, true} {
-		for _, mount := range []string{"/mnt/storage", "/"} {
-			disks := testRAID(mount, partitioned)
-			before, _ := json.Marshal(disks)
-			got := StorageDevices(disks, "")
-			if len(got) != 1 || len(got[0].Children) != 1 {
-				t.Fatalf("partitioned=%v mount=%s: duplicate/missing volumes: %#v", partitioned, mount, got)
-			}
-			name := "RAID10"
-			if mount == "/" {
-				name = "System"
-			}
-			if got[0].Model != name || got[0].Path != "/dev/md0" || got[0].Size != 2000 || got[0].Tran != "raid10" {
-				t.Fatalf("wrong logical group: %#v", got[0])
-			}
-			if got[0].Children[0].MountPoint != mount {
-				t.Fatal("mount point changed")
-			}
-			if !reflect.DeepEqual(StorageDevices(got, ""), got) {
-				t.Fatal("not idempotent")
-			}
-			got[0].Children[0].Label = "changed"
-			after, _ := json.Marshal(disks)
-			if string(before) != string(after) {
-				t.Fatal("input tree changed")
-			}
-		}
+	cases := []struct {
+		name        string
+		mount       string
+		partitioned bool
+		model       string
+	}{
+		{"whole-drive data", "/mnt/storage", false, "RAID10"},
+		{"whole-drive root", "/", false, "System"},
+		{"partitioned data", "/mnt/storage", true, "RAID10"},
+		{"partitioned root", "/", true, "System"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkRAIDStorage(t, tc.mount, tc.partitioned, tc.model)
+		})
+	}
+}
+
+func checkRAIDStorage(t *testing.T, mount string, partitioned bool, name string) {
+	t.Helper()
+	disks := testRAID(mount, partitioned)
+	before, _ := json.Marshal(disks)
+	got := StorageDevices(disks, "")
+	if len(got) != 1 || len(got[0].Children) != 1 {
+		t.Fatalf("duplicate/missing volumes: %#v", got)
+	}
+	if got[0].Model != name || got[0].Path != "/dev/md0" || got[0].Size != 2000 || got[0].Tran != "raid10" {
+		t.Fatalf("wrong logical group: %#v", got[0])
+	}
+	if got[0].Children[0].MountPoint != mount {
+		t.Fatal("mount point changed")
+	}
+	if !reflect.DeepEqual(StorageDevices(got, ""), got) {
+		t.Fatal("not idempotent")
+	}
+	got[0].Children[0].Label = "changed"
+	after, _ := json.Marshal(disks)
+	if string(before) != string(after) {
+		t.Fatal("input tree changed")
 	}
 }
 
