@@ -12,7 +12,6 @@ package v1
 import (
 	"net/http"
 	"path/filepath"
-	"reflect"
 	"time"
 
 	"github.com/IceWhaleTech/CasaOS-Common/model"
@@ -28,120 +27,55 @@ import (
 )
 
 func GetStorageList(ctx echo.Context) error {
-	system := ctx.QueryParam("system")
-
+	showSystem := ctx.QueryParam("system") != ""
 	blkList := service.MyService.Disk().LSBLK(false)
-	foundSystem := false
-
-	storages := []model1.Storages{}
 	df, err := service.MyService.Disk().GetSystemDf()
-	// db, err := service.MyService.Disk().GetSerialAllFromDB()
-	// if err != nil {
-	// 	logger.Error("error when getting all volumes from database", zap.Error(err))
-	// 	return ctx.JSON(http.StatusInternalServerError, model.Result{Success: common_err.SERVICE_ERROR, Message: err.Error()})
-	// 	return
-	// }
-	// mapdb := make(map[string]string)
-	// for _, v := range db {
-	// 	mapdb[v.MountPoint] = v.MountPoint
-	// }
-	for _, currentDisk := range blkList {
-		// if currentDisk.Tran == "usb" {
-		// 	continue
-		// }
-
-		tempSystemDisk := false
-		children := 1
-		tempDisk := model1.Storages{
-			DiskName: currentDisk.Model,
-			Path:     currentDisk.Path,
-			Size:     currentDisk.Size,
-			Type:     currentDisk.Tran,
-		}
-
-		storageArr := []model1.Storage{}
-		temp := service.MyService.Disk().SmartCTL(currentDisk.Path)
-		if reflect.DeepEqual(temp, model1.SmartctlA{}) {
-			temp.SmartStatus.Passed = true
-		}
-		if len(currentDisk.Children) == 0 && service.IsDiskSupported(currentDisk) {
-			currentDisk.Children = append(currentDisk.Children, currentDisk)
-		}
-		for _, blkChild := range currentDisk.Children {
-			if err == nil {
-				if blkChild.Path == df.FileSystem {
-					tempDisk.DiskName = "System"
-					foundSystem = true
-					tempSystemDisk = true
-					logger.Info("found system disk", zap.String("disk", blkChild.Path))
-				}
-			}
-			if blkChild.MountPoint == "" {
-				continue
-			}
-			if !foundSystem {
-				if blkChild.MountPoint == "/" {
-					tempDisk.DiskName = "System"
-					foundSystem = true
-					tempSystemDisk = true
-				} else {
-					for _, c := range blkChild.Children {
-						if c.MountPoint == "/" {
-							tempDisk.DiskName = "System"
-							foundSystem = true
-							tempSystemDisk = true
-							break
-						}
-					}
-				}
-			}
-			stor := model1.Storage{
-				UUID:        blkChild.UUID,
-				MountPoint:  blkChild.MountPoint,
-				Size:        blkChild.FSSize.String(),
-				Avail:       blkChild.FSAvail.String(),
-				Used:        blkChild.FSUsed.String(),
-				Path:        blkChild.Path,
-				Type:        blkChild.FsType,
-				DriveName:   blkChild.Name,
-				PersistedIn: service.MyService.Disk().GetPersistentTypeByUUID(blkChild.UUID),
-			}
-			if len(blkChild.Label) == 0 {
-				if stor.MountPoint == "/" {
-					stor.Label = "System"
-				} else {
-					stor.Label = filepath.Base(stor.MountPoint)
-				}
-
-				children++
-			} else {
-				stor.Label = blkChild.Label
-			}
-			// if _, ok := mapdb[stor.MountPoint]; ok || stor.Label == "System" {
-			storageArr = append(storageArr, stor)
-			//}
-
-		}
-
-		if len(storageArr) == 0 {
-			continue
-		}
-
-		if tempSystemDisk && len(system) > 0 {
-			tempStorageArr := []model1.Storage{}
-			for i := 0; i < len(storageArr); i++ {
-				if storageArr[i].MountPoint != "/boot/efi" && storageArr[i].Type != "swap" {
-					tempStorageArr = append(tempStorageArr, storageArr[i])
-				}
-			}
-			tempDisk.Children = tempStorageArr
-			storages = append(storages, tempDisk)
-		} else if !tempSystemDisk {
-			tempDisk.Children = storageArr
-			storages = append(storages, tempDisk)
-		}
+	systemPath := ""
+	if err == nil {
+		systemPath = df.FileSystem
 	}
 
+	storages := []model1.Storages{}
+	for _, disk := range model1.StorageDevices(blkList, systemPath) {
+		isSystem := disk.Model == "System"
+		if isSystem && !showSystem {
+			continue
+		}
+		storage := model1.Storages{
+			DiskName: disk.Model,
+			Path:     disk.Path,
+			Size:     disk.Size,
+			Type:     disk.Tran,
+			Children: []model1.Storage{},
+		}
+		for _, volume := range disk.Children {
+			if isSystem && (volume.MountPoint == "/boot/efi" || volume.FsType == "swap") {
+				continue
+			}
+			label := volume.Label
+			if label == "" {
+				label = filepath.Base(volume.MountPoint)
+				if volume.MountPoint == "/" {
+					label = "System"
+				}
+			}
+			storage.Children = append(storage.Children, model1.Storage{
+				UUID:        volume.UUID,
+				MountPoint:  volume.MountPoint,
+				Size:        volume.FSSize.String(),
+				Avail:       volume.FSAvail.String(),
+				Used:        volume.FSUsed.String(),
+				Path:        volume.Path,
+				Type:        volume.FsType,
+				DriveName:   volume.Name,
+				Label:       label,
+				PersistedIn: service.MyService.Disk().GetPersistentTypeByUUID(volume.UUID),
+			})
+		}
+		if len(storage.Children) > 0 {
+			storages = append(storages, storage)
+		}
+	}
 	return ctx.JSON(common_err.SUCCESS, model.Result{Success: common_err.SUCCESS, Message: common_err.GetMsg(common_err.SUCCESS), Data: storages})
 }
 

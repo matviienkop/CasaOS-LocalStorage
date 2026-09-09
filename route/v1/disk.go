@@ -19,6 +19,18 @@ import (
 
 const messagePathStorageStatus = common.ServiceName + ":storage_status"
 
+func diskInUse(disk model1.LSBLKModel) bool {
+	if disk.MountPoint != "" || disk.FsType == "linux_raid_member" || strings.HasPrefix(disk.Type, "raid") {
+		return true
+	}
+	for _, child := range disk.Children {
+		if diskInUse(child) {
+			return true
+		}
+	}
+	return false
+}
+
 var diskMap = make(map[string]string)
 
 type StorageMessage struct {
@@ -126,18 +138,7 @@ func GetDiskList(ctx echo.Context) error {
 			temp.SmartStatus.Passed = true
 		}
 
-		isAvail := true
-		if len(currentDisk.MountPoint) != 0 {
-			isAvail = false
-		} else {
-			for _, v := range currentDisk.Children {
-				if v.MountPoint != "" {
-					isAvail = false
-				}
-			}
-		}
-
-		if isAvail {
+		if !diskInUse(currentDisk) {
 			disk.NeedFormat = false
 			avail = append(avail, disk)
 		}
