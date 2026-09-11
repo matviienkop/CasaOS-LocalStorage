@@ -111,6 +111,8 @@ func GetDiskList(ctx echo.Context) error {
 
 		temp := service.MyService.Disk().SmartCTL(currentDisk.Path)
 		disk.Temperature = temp.Temperature.Current
+		disk.SmartState = temp.ReadState
+		disk.SmartSampledAt = temp.SampledAt
 
 		if systemDisk == nil {
 			// go 5 level deep to look for system block device by mount point being "/"

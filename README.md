@@ -29,3 +29,24 @@ Auto publish
 ```bash 
 git push origin dev**
 ```
+
+## SMART polling
+
+SMART data is refreshed on demand at most once every 15 minutes per device.
+Background storage notifications and disk API requests share the same cache.
+`smartctl -n standby,3,5` skips sleeping ATA disks and devices whose ATA power
+state cannot be determined. Native ATA devices are identified through sysfs
+and queried with `-d ata` to avoid device autodetection waking them. Other
+transports retain their previously detected device type after a successful read;
+their initial autodetection may depend on controller behavior.
+
+A confirmed sleep response keeps the last successful sample and defers the next
+attempt by 15 minutes. Errors and device removal do not reuse old readings.
+Replacing a device node invalidates the previous sample. The cache is in memory:
+a disk already sleeping at service startup has no historical sample to display.
+
+The legacy `/v1/disks` response additionally exposes `smart_state` (`fresh`,
+`sleeping`, or `unavailable`) and `smart_sampled_at` (Unix seconds of the last
+successful sample, omitted when no sample exists). The original `temperature`
+field remains available; a sleeping disk's value is the last measurement, not a
+new measurement. Consumers should display its timestamp and state.

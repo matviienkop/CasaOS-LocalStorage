@@ -1,7 +1,9 @@
 package model
 
 type SmartctlA struct {
-	Smartctl struct {
+	ReadState string `json:"-"`
+	SampledAt int64  `json:"-"`
+	Smartctl  struct {
 		Version      []int    `json:"version"`
 		SvnRevision  string   `json:"svn_revision"`
 		PlatformInfo string   `json:"platform_info"`
