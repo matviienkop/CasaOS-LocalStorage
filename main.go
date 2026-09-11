@@ -156,7 +156,7 @@ func main() {
 	go sendStorageStats()
 
 	crontab := cron.New(cron.WithSeconds())
-	if _, err := crontab.AddFunc("@every 5s", sendStorageStats); err != nil {
+	if _, err := crontab.AddFunc("@every 1m", sendStorageStats); err != nil {
 		logger.Error("crontab add func error", zap.Error(err))
 	}
 
