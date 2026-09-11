@@ -51,6 +51,8 @@ type LSBLKModel struct {
 }
 
 type Drive struct {
+	SmartState     string         `json:"smart_state,omitempty"`
+	SmartSampledAt int64          `json:"smart_sampled_at,omitempty"`
 	Name           string         `json:"name"`
 	Size           uint64         `json:"size"`
 	Model          string         `json:"model"`

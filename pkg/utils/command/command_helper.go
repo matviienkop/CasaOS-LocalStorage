@@ -11,20 +11,23 @@ import (
 )
 
 // exec smart
-func ExecSmartCTLByPath(path string) []byte {
-	timeout := 6
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+func ExecSmartCTLByPath(path, deviceType string) ([]byte, int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
-	// smartctl -i -n standby /dev/sdc  TODO:https://www.ippa.top/956.html
-	cmd := exec2.CommandContext(ctx, "smartctl", "-a", "-n", "standby", path, "-j")
-
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Println("smartctl", err.Error())
-		fmt.Println("smartctl", string(path))
-		fmt.Println("smartctl", len(output))
+	args := []string{"-a", "-n", "standby,3,5", "-j"}
+	if deviceType != "" {
+		args = append(args, "-d", deviceType)
 	}
-	return output
+	args = append(args, path)
+	output, err := exec2.CommandContext(ctx, "smartctl", args...).Output()
+	if err == nil {
+		return output, 0
+	}
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		return output, exitError.ExitCode()
+	}
+	return output, -1
 }
 
 func ExecEnabledSMART(path string) ([]byte, error) {

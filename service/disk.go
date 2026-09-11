@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -160,33 +159,7 @@ func (d *diskService) UmountUSB(path string) error {
 }
 
 func (d *diskService) SmartCTL(path string) model.SmartctlA {
-	key := "system_smart_" + path
-	if result, ok := Cache.Get(key); ok {
-
-		res, ok := result.(model.SmartctlA)
-		if ok {
-			return res
-		}
-	}
-	var m model.SmartctlA
-	buf := command.ExecSmartCTLByPath(path)
-	if buf == nil {
-		if err := Cache.Add(key, m, time.Minute*10); err != nil {
-			// logger.Error("failed to add cache", zap.Error(err), zap.String("key", key))
-		}
-		return m
-	}
-
-	err := json2.Unmarshal(buf, &m)
-	if err != nil {
-		// logger.Error("failed to unmarshal json", zap.Error(err), zap.String("json", string(buf)))
-	}
-	if !reflect.DeepEqual(m, model.SmartctlA{}) {
-		if err := Cache.Add(key, m, time.Hour*24); err != nil {
-			// logger.Error("failed to add cache", zap.Error(err), zap.String("key", key))
-		}
-	}
-	return m
+	return diskSMART.get(path)
 }
 
 // 格式化硬盘
